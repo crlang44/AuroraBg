@@ -6,7 +6,7 @@ editor surfaces see-through, all in one.
 
 ![Aurora Live Animated Background Demo](demo.gif)
 
-> **Disclaimers:** Yes this was built by AI, and no it will not make you more productive (but I think its cool nontheless) 
+> **Disclaimers:** Yes this was built by AI, and no it will not make you more productive (but I think its cool nonetheless) 
 
 ---
 
