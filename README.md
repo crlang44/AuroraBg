@@ -96,6 +96,7 @@ This extension patches the editor's own UI files, which has a few side effects:
   Click the gear icon → **"Don't Show Again"**.
 - **Re-enable after every update** — app updates overwrite the patch. Just run
   **"Enable Custom CSS and JS"** again.
+- **Permissions (macOS/Linux)** — if enabling fails, the loader extension may not have permission to modify the editor's files. Refer to the **Custom CSS and JS Loader** extension page/repository for instructions on resolving permissions.
 
 ---
 
