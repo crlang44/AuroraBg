@@ -83,7 +83,7 @@ After any change, run Command Palette → **"Reload Custom CSS and JS"**.
 - Hard to read your code? Raise `dim` or lower `opacity`.
 - Want the minimap fully solid again? Set `minimap: 1` (or disable it in settings with `"editor.minimap.enabled": false`).
 - Want sticky scroll fully opaque? Set `sticky: 1`.
-- A **dark color theme** looks best, since some theme surfaces stay tinted.
+- A **dark color theme** looks best, since some theme surfaces stay tinted (the preview shows the [Tokyo Night Storm](https://marketplace.visualstudio.com/items?itemName=enkia.tokyo-night) theme).
 
 ---
 
