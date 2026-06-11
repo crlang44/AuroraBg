@@ -65,6 +65,7 @@ That's it — the aurora should now be drifting behind your code.
 
 ## Tuning
 
+
 Open `aurora-vscode.js` and edit the `CONFIG` block at the top:
 
 ```js
@@ -79,6 +80,8 @@ const CONFIG = {
 
 After any change, run Command Palette → **"Reload Custom CSS and JS"**.
 
+  ![Aurora Tuning Demo](demo.png)
+  
 **Tips**
 - Hard to read your code? Raise `dim` or lower `opacity`.
 - Want the minimap fully solid again? Set `minimap: 1` (or disable it in settings with `"editor.minimap.enabled": false`).
