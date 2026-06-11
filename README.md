@@ -96,13 +96,6 @@ This extension patches the editor's own UI files, which has a few side effects:
   Click the gear icon → **"Don't Show Again"**.
 - **Re-enable after every update** — app updates overwrite the patch. Just run
   **"Enable Custom CSS and JS"** again.
-- **Permissions (macOS)** — if enabling fails, the app can't write to its own folder. Grant access with:
-  ```bash
-  # VS Code
-  sudo chown -R $(whoami) "/Applications/Visual Studio Code.app/Contents/Resources/app"
-  # Antigravity (adjust the app name/path to match your install)
-  sudo chown -R $(whoami) "/Applications/Antigravity.app/Contents/Resources/app"
-  ```
 
 ---
 
