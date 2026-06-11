@@ -6,9 +6,7 @@ editor surfaces see-through, all in one.
 
 ![Aurora Live Animated Background Demo](demo.gif)
 
-> **Antigravity users:** Antigravity is built on VS Code, so every step below is identical —
-> just substitute "Antigravity" wherever it says "VS Code" (including the app name when you
-> grant file permissions). The extension, settings, and commands are the same.
+> **Disclaimers:** Yes this was built by AI, and no it will not make you more productive (but I think its cool nontheless) 
 
 ---
 
@@ -81,7 +79,7 @@ const CONFIG = {
 After any change, run Command Palette → **"Reload Custom CSS and JS"**.
 
   ![Aurora Tuning Demo](demo.png)
-  
+
 **Tips**
 - Hard to read your code? Raise `dim` or lower `opacity`.
 - Want the minimap fully solid again? Set `minimap: 1` (or disable it in settings with `"editor.minimap.enabled": false`).
