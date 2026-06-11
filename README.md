@@ -1,8 +1,10 @@
-# Aurora — live animated background for VS Code & Antigravity
+# Aurora & Ocean — live animated backgrounds for VS Code & Antigravity
 
-A slow, iridescent aurora shader that renders **behind your code editor**. It's a single
-self-contained file (`aurora-vscode.js`) — WebGL shader + the styling needed to make the
-editor surfaces see-through, all in one.
+Slow, immersive shaders that render **behind your code editor**. These are single, self-contained files containing a WebGL shader + the styling needed to make the editor surfaces see-through.
+
+You can choose between:
+- **Aurora Theme (`aurora-vscode.js`)**: A slow, iridescent polar light shader.
+- **Ocean Theme (`ocean-vscode.js`)**: A calming, deep underwater scene with projected surface caustics, god rays, and floating bioluminescent particles.
 
 ![Aurora Live Animated Background Demo](demo.gif)
 
@@ -37,16 +39,16 @@ Open the Extensions panel and search for **"Custom CSS and JS Loader"** → **In
 - **Visual Studio Marketplace:** publisher *be5invis* (`be5invis.vscode-custom-css`)
 - **Open-VSX:** publisher *s-h-a-d-o-w* (`s-h-a-d-o-w.vscode-custom-css`)
 
-### 2. Save the Aurora file somewhere permanent
-Put `aurora-vscode.js` in a stable folder — e.g. `~/aurora/aurora-vscode.js`.
+### 2. Save the theme file somewhere permanent
+Choose the theme file you want to use (`aurora-vscode.js` or `ocean-vscode.js`) and put it in a stable folder — e.g. `~/aurora/ocean-vscode.js`.
 If you later move or delete it, the background disappears.
 
 ### 3. Point your editor at it
-Open your settings JSON: Command Palette (`Cmd/Ctrl+Shift+P`) → **"Preferences: Open User Settings (JSON)"** — and add:
+Open your settings JSON: Command Palette (`Cmd/Ctrl+Shift+P`) → **"Preferences: Open User Settings (JSON)"** — and add the path to the selected theme file:
 
 ```jsonc
 "vscode_custom_css.imports": [
-  "file:///Users/YOURNAME/aurora/aurora-vscode.js"
+  "file:///Users/YOURNAME/aurora/ocean-vscode.js"
 ]
 ```
 
@@ -64,14 +66,14 @@ That's it — the aurora should now be drifting behind your code.
 ## Tuning
 
 
-Open `aurora-vscode.js` and edit the `CONFIG` block at the top:
+Open your chosen file (`aurora-vscode.js` or `ocean-vscode.js`) and edit the `CONFIG` block at the top:
 
 ```js
 const CONFIG = {
-  opacity: 0.60, // how visible the aurora is behind your code   (0 – 1)
-  dim:     0.45, // extra dark scrim for text readability         (0 – 1)
+  opacity: 0.60, // how visible the animation is behind your code (0 – 1)
+  dim:     0.50, // extra dark scrim for text readability         (0 – 1)
   speed:   1.00, // motion speed multiplier                       (0.2 – 3)
-  minimap: 0.45, // minimap translucency so aurora shows through  (0 = invisible, 1 = solid)
+  minimap: 0.45, // minimap translucency so background shows through
   sticky:  0.92, // sticky-scroll backing opacity (uses your THEME's color)
 };
 ```
