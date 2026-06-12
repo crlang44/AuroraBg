@@ -164,6 +164,22 @@
       }
   `;
 
+  /* continuous directional forcing: two traveling plane waves push the sea
+     so swell rolls from one side to the other instead of radiating in rings */
+  const FRAG_SWELL = `
+      precision highp float;
+      uniform sampler2D water;
+      uniform vec2 k1; uniform vec2 k2;
+      uniform float ph1; uniform float ph2;
+      uniform float amp;
+      varying vec2 vUv;
+      void main(){
+        vec4 info = texture2D(water, vUv);
+        info.r += amp * (sin(dot(vUv, k1) + ph1) + 0.6 * sin(dot(vUv, k2) + ph2));
+        gl_FragColor = info;
+      }
+  `;
+
   /* one tick of the wave equation: r = height, g = velocity */
   const FRAG_STEP = `
       precision highp float;
@@ -611,10 +627,11 @@
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
     const progDrop = compileProgram(gl, VERT_PASS, FRAG_DROP);
+    const progSwell = compileProgram(gl, VERT_PASS, FRAG_SWELL);
     const progStep = compileProgram(gl, VERT_PASS, FRAG_STEP);
     const progCaust = compileProgram(gl, VERT_CAUSTICS, FRAG_CAUSTICS);
     const progMain = compileProgram(gl, VERT_MAIN, FRAG_SCENE);
-    if (!progDrop || !progStep || !progCaust || !progMain) return false;
+    if (!progDrop || !progSwell || !progStep || !progCaust || !progMain) return false;
 
     // fullscreen triangle
     const quad = gl.createBuffer();
@@ -641,6 +658,7 @@
     const U = (p, n) => gl.getUniformLocation(p, n);
     const A = (p, n) => gl.getAttribLocation(p, n);
     const uDrop = { water: U(progDrop, 'water'), center: U(progDrop, 'center'), dir: U(progDrop, 'dir'), radius: U(progDrop, 'radius'), strength: U(progDrop, 'strength'), ap: A(progDrop, 'p') };
+    const uSwell = { water: U(progSwell, 'water'), k1: U(progSwell, 'k1'), k2: U(progSwell, 'k2'), ph1: U(progSwell, 'ph1'), ph2: U(progSwell, 'ph2'), amp: U(progSwell, 'amp'), ap: A(progSwell, 'p') };
     const uStep = { water: U(progStep, 'water'), delta: U(progStep, 'delta'), ap: A(progStep, 'p') };
     const uCaust = { water: U(progCaust, 'water'), delta: U(progCaust, 'delta'), av: A(progCaust, 'av') };
     const uMain = { res: U(progMain, 'iResolution'), time: U(progMain, 'iTime'), water: U(progMain, 'uWater'), caust: U(progMain, 'uCaustics'), ap: A(progMain, 'p') };
@@ -716,37 +734,50 @@
 
     const resize = watchResize(canvas);
 
-    // one prevailing swell direction for this session, with per-gust jitter
+    // one prevailing swell direction for this session; two traveling plane
+    // waves (primary swell + an off-angle secondary) push the sea sideways
     const swellDir = Math.random() * 6.2832;
+    const swellK1 = [Math.cos(swellDir) * 18.85, Math.sin(swellDir) * 18.85];             // ~3 wavelengths per tile
+    const swellK2 = [Math.cos(swellDir + 0.45) * 31.4, Math.sin(swellDir + 0.45) * 31.4]; // ~5, off-angle
 
-    // prime the sea: broad swells first, then a sprinkle of fine chop
-    for (let i = 0; i < 50; i++) {
-      drop(Math.random(), Math.random(), 0.05 + Math.random() * 0.08,
-           (Math.random() - 0.5) * 0.12, swellDir + (Math.random() - 0.5) * 0.6);
-      step(); step();
+    function swellForce(p1, p2) {
+      waterPass(progSwell, uSwell, () => {
+        gl.uniform2f(uSwell.k1, swellK1[0], swellK1[1]);
+        gl.uniform2f(uSwell.k2, swellK2[0], swellK2[1]);
+        gl.uniform1f(uSwell.ph1, p1);
+        gl.uniform1f(uSwell.ph2, p2);
+        gl.uniform1f(uSwell.amp, 0.0006);
+      });
     }
-    for (let i = 0; i < 25; i++) {
-      drop(Math.random(), Math.random(), 0.012 + Math.random() * 0.02,
-           (Math.random() - 0.5) * 0.05, Math.random() * 6.2832);
+
+    // spin the sea up to a rolling state before first paint
+    let ph1 = 0, ph2 = 1.7;
+    for (let i = 0; i < 400; i++) {
+      ph1 -= 0.018; ph2 -= 0.011;
+      swellForce(ph1, ph2);
+      step();
+    }
+    for (let i = 0; i < 20; i++) {
+      drop(Math.random(), Math.random(), 0.01 + Math.random() * 0.015,
+           (Math.random() - 0.5) * 0.03, Math.random() * 6.2832);
       step();
     }
 
     const start = performance.now();
-    let nextSwell = 0, nextChop = 0, stepAcc = 0;
+    let nextChop = 0, stepAcc = 0;
     (function loop() {
       resize();
       const now = performance.now();
-      // broad swell gusts keep the sea undulating...
-      if (now >= nextSwell) {
-        nextSwell = now + (180 + Math.random() * 320) / CONFIG.speed;
-        drop(Math.random(), Math.random(), 0.05 + Math.random() * 0.08,
-             (Math.random() - 0.5) * 0.10, swellDir + (Math.random() - 0.5) * 0.6);
-      }
-      // ...while a little fine chop keeps the caustic filaments crisp
+      // the traveling forcing waves advance their phase every frame, dragging
+      // the sea along so swell rolls from one side to the other
+      ph1 -= 0.018 * CONFIG.speed;
+      ph2 -= 0.011 * CONFIG.speed;
+      swellForce(ph1, ph2);
+      // a little fine chop keeps the caustic filaments crisp
       if (now >= nextChop) {
         nextChop = now + (250 + Math.random() * 350) / CONFIG.speed;
-        drop(Math.random(), Math.random(), 0.012 + Math.random() * 0.02,
-             (Math.random() - 0.5) * 0.05, Math.random() * 6.2832);
+        drop(Math.random(), Math.random(), 0.01 + Math.random() * 0.015,
+             (Math.random() - 0.5) * 0.03, Math.random() * 6.2832);
       }
       // sim rate scales with CONFIG.speed (~1 step per frame at speed 1)
       stepAcc += CONFIG.speed;
