@@ -171,7 +171,7 @@
         // 1. Background Gradient (The Cutout)
         vec3 colBottom = vec3(0.01, 0.02, 0.08); // Very dark navy abyss
         vec3 colMid    = vec3(0.02, 0.15, 0.45); // Deep true blue (less green)
-        vec3 colTop    = vec3(0.05, 0.40, 0.85); // Bright true blue near surface (removed teal/green)
+        vec3 colTop    = vec3(0.05, 0.46, 0.85); // Bright blue near surface, slightly green to match the caustics
         
         vec3 col = mix(colBottom, colMid, smoothstep(0.0, 0.5, depth));
         col = mix(col, colTop, smoothstep(0.5, 1.0, depth));
@@ -212,8 +212,12 @@
           float d = 2.5 * pow(2.2, float(k));           // curtain distance: 2.5, 5.5, 12
           float yAtt = horizonBase + 1.0 / d;           // where it meets the surface on screen
           float sway = sin(t * (1.1 - 0.04 * d) + d * 2.7) * 0.5 / d;
-          // rays lean off vertical, like sunlight slanting through the water
-          float tilt = 0.16 + 0.05 * sin(t * 0.2 + d * 1.7);
+          // rays refract off straight-down according to the wave slope overhead:
+          // a flat surface gives vertical shafts, a passing swell bends them
+          vec2 ap = vec2(uv.x * d, d);
+          float hT = waveH(ap, t);
+          float slopeA = (waveH(ap + vec2(0.15, 0.0), t) - hT) / 0.15;
+          float tilt = clamp(slopeA * 0.22, -0.35, 0.35);
           float xs = uv.x + (yAtt - uv.y) * tilt;       // ray-column coordinate
           float xw = xs * d * 2.2 + sway + d * 7.31;    // perspective: far shafts pack tighter
           float shafts = pow(rayCurtain(xw, t * (1.4 - 0.05 * d) + d), 1.2);
