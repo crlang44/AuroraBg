@@ -146,6 +146,14 @@
         return pow(abs(c), 8.0);
       }
 
+      /* low-frequency swell height field for the overhead surface plane */
+      float waveH(vec2 p, float tw){
+        float h = sin(p.y * 0.55 + tw * 2.2);
+        h += 0.6 * sin(dot(p, vec2(0.42, 0.35)) + tw * 1.6);
+        h += 0.8 * vnoise(p * 0.35 + vec2(tw * 0.8, tw * 0.5)) - 0.4;
+        return h;
+      }
+
       void main(){
         vec2 frag=gl_FragCoord.xy;
         vec2 uv=(frag-0.5*iResolution.xy)/iResolution.y;
@@ -210,7 +218,8 @@
         // 4. The water surface seen from below: the upper band of the screen is
         // perspective-projected onto an overhead plane, so the caustic cells
         // foreshorten and recede toward a hazy horizon line.
-        float horizon = 0.22 + 0.03 * fbm(vec2(uv.x * 2.5 + t * 1.2, t * 0.8));
+        float horizon = 0.22 + 0.025 * sin(uv.x * 4.0 - t * 2.6)
+                      + 0.02 * fbm(vec2(uv.x * 2.5 + t * 1.2, t * 0.8));
         float dy = uv.y - horizon;
 
         // soft glow where the surface melts into the distance
@@ -218,9 +227,17 @@
 
         if (dy > 0.002) {
           float dist = 1.0 / dy;                     // distance along the overhead plane
-          vec2 pw = vec2(uv.x * dist, dist);         // projected point on the surface
-          pw = pw * 0.22 + vec2(t * 0.6, t * 1.1);   // pattern scale + slow current drift
-          pw.x += sin(pw.y * 1.5 + t * 2.0) * 0.12;  // long swell bending the web
+          vec2 pw0 = vec2(uv.x * dist, dist);        // projected point on the surface
+
+          // rolling swells: sample the height field and finite-difference its slope
+          float e = 0.15;
+          float h = waveH(pw0, t);
+          vec2 grad = vec2(waveH(pw0 + vec2(e, 0.0), t) - h,
+                           waveH(pw0 + vec2(0.0, e), t) - h) / e;
+
+          // parallax-refract the caustic lookup over the swells, then scale + drift
+          vec2 pw = (pw0 + grad * 0.9) * 0.22 + vec2(t * 0.6, t * 1.1);
+          pw.x += sin(pw.y * 1.5 + t * 2.0) * 0.12;
 
           float tc = iTime * 0.3 + 23.0;
           // chromatic dispersion: wavelengths focus at slightly different points
@@ -229,9 +246,17 @@
           float cb = caustic(pw * 1.024, tc + 0.08);
           vec3 web = vec3(cr, cg, cb) * vec3(0.40, 0.80, 1.15);
 
+          // slope shading: wave faces tilted toward the viewer catch the skylight
+          float shade = clamp(0.55 - grad.y * 0.45 - grad.x * 0.12, 0.0, 1.0);
+          // glassy highlight running along the swell crests
+          float glint = pow(clamp(1.0 - abs(grad.y - 0.55) * 1.6, 0.0, 1.0), 3.0);
+
           float fog = exp(-(dist - 3.0) * 0.18);     // far cells dissolve into the haze
           fog = min(fog, 1.0);
-          col += (vec3(0.04, 0.22, 0.55) * 0.35 + web * float(${CONFIG.caustics.toFixed(2)}) * 0.8) * fog;
+          col += (vec3(0.04, 0.22, 0.55) * 0.35
+                  + web * float(${CONFIG.caustics.toFixed(2)}) * 0.8
+                  + vec3(0.35, 0.65, 1.0) * glint * 0.30)
+                 * (0.45 + 1.1 * shade) * fog;
         }
 
         // 5. Drifting Bioluminescent Plankton
