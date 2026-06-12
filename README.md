@@ -4,7 +4,7 @@ Slow, immersive shaders that render **behind your code editor**. These are singl
 
 You can choose between:
 - **Aurora Theme (`aurora-vscode.js`)**: A slow, iridescent polar light shader.
-- **Ocean Theme (`ocean-vscode.js`)**: A calming, deep underwater scene with projected surface caustics, god rays, and floating bioluminescent particles.
+- **Ocean Theme (`ocean-vscode.js`)**: A calming, deep underwater scene with a real-time water simulation: a wave-equation heightfield with caustics computed by refracting light through the simulated surface (after [Evan Wallace's WebGL Water](https://medium.com/@evanwallace/rendering-realtime-caustics-in-webgl-2a99a29a0b2c)), driving the surface, the god rays, and floating bioluminescent particles. Falls back to a procedural approximation on GPUs without float textures.
 
 ![Aurora Live Animated Background Demo](demo.gif)
 
