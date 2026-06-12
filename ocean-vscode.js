@@ -163,6 +163,13 @@
         return h;
       }
 
+      /* one vertical curtain of light shafts: noise across x, animated in time */
+      float rayCurtain(float x, float tt){
+        float a = vnoise(vec2(x, tt));
+        float b = vnoise(vec2(x * 2.3 + 7.7, tt * 1.4));
+        return smoothstep(0.45, 0.85, a * 0.6 + b * 0.4);
+      }
+
       void main(){
         vec2 frag=gl_FragCoord.xy;
         vec2 uv=(frag-0.5*iResolution.xy)/iResolution.y;
@@ -192,42 +199,38 @@
         // Add the fluid ripples (very subtle so it doesn't look like thick haze/smoke)
         col += vec3(0.01, 0.05, 0.15) * f * depth;
 
-        // 3. Volumetric God Rays (Randomly appearing/disappearing)
-        // Almost entirely straight down, with barely any radial fan
-        float expansion = mix(1.1, 0.95, depth); 
-        float scaledX = uv.x / expansion;
-        
-        // Very slow, subtle sway so they aren't completely frozen
-        scaledX += sin(t * 0.2) * 0.02;
-        
-        // --- Layer 1: Broad, ultra-transparent background washes ---
-        float bg1 = vnoise(vec2(scaledX * 4.0, t * 0.4));
-        float bg2 = vnoise(vec2(scaledX * 8.0, t * 0.6));
+        // 3. Volumetric god rays, distributed in depth: three curtains of shafts
+        // hang from the surface at increasing distance. Each one attaches to the
+        // screen where the surface plane appears at that distance, and farther
+        // curtains are thinner, shorter, dimmer, and washed out by water haze.
+        float horizonBase = 0.22;
+
+        // ambient wash so the water column never goes flat
+        float bg1 = vnoise(vec2(uv.x * 4.0, t * 0.4));
+        float bg2 = vnoise(vec2(uv.x * 8.0, t * 0.6));
         float bgShafts = smoothstep(0.3, 0.9, bg1 * 0.6 + bg2 * 0.4);
-        
-        // Add background layer color: incredibly faint so it doesn't look hazy
         col += vec3(0.04, 0.10, 0.25) * bgShafts * pow(depth, 1.5) * 0.25;
-        
-        // --- Layer 2: Primary, distinct rays ---
-        float n1 = vnoise(vec2(scaledX * 12.0, t * 0.8));
-        float n2 = vnoise(vec2(scaledX * 24.0, t * 1.2));
-        float n3 = vnoise(vec2(scaledX * 45.0, t * 1.6));
-        
-        float baseShafts = n1 * 0.5 + n2 * 0.3 + n3 * 0.2;
-        float shafts = smoothstep(0.45, 0.85, baseShafts);
-        shafts = pow(shafts, 1.3) * 1.2;
-        
-        // Dynamic depth penetration for primary rays
-        float depthVar = vnoise(vec2(scaledX * 4.0, t * 0.5));
-        float rayDepth = depth * (0.2 + depthVar * 1.5);
-        
-        // Add primary layer color: softer blue, less green, more transparent overall
-        col += vec3(0.10, 0.20, 0.65) * shafts * pow(clamp(rayDepth, 0.0, 1.0), 1.5) * 0.9;
+
+        vec3 rayTint = vec3(0.10, 0.20, 0.65);
+        vec3 hazeTint = colTop * 1.1;
+        for (int k = 0; k < 3; k++) {
+          float d = 2.5 * pow(2.2, float(k));           // curtain distance: 2.5, 5.5, 12
+          float yAtt = horizonBase + 1.0 / d;           // where it meets the surface on screen
+          float sway = sin(t * (1.1 - 0.04 * d) + d * 2.7) * 0.5 / d;
+          float xw = uv.x * d * 2.2 + sway + d * 7.31;  // perspective: far shafts pack tighter
+          float shafts = pow(rayCurtain(xw, t * (1.4 - 0.05 * d) + d), 1.2);
+          float lenVar = 0.5 + vnoise(vec2(xw * 0.4, t * 0.5 + d)) * 1.1;
+          float below = max(yAtt - uv.y, 0.0);
+          float fall = exp(-below * d * 0.35 / lenVar); // far curtains compress vertically
+          float cut = smoothstep(yAtt + 0.05, yAtt - 0.03, uv.y);
+          float fogL = exp(-d * 0.085);                 // distance haze
+          col += mix(hazeTint, rayTint, fogL) * shafts * fall * cut * fogL * 0.8;
+        }
 
         // 4. The water surface seen from below: the upper band of the screen is
         // perspective-projected onto an overhead plane, so the caustic cells
         // foreshorten and recede toward a hazy horizon line.
-        float horizon = 0.22 + 0.025 * sin(uv.x * 4.0 - t * 2.6)
+        float horizon = horizonBase + 0.025 * sin(uv.x * 4.0 - t * 2.6)
                       + 0.02 * fbm(vec2(uv.x * 2.5 + t * 1.2, t * 0.8));
         float dy = uv.y - horizon;
 
