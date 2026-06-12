@@ -145,15 +145,19 @@
       void main(){ vUv = p * 0.5 + 0.5; gl_Position = vec4(p, 0.0, 1.0); }
   `;
 
-  /* add a disturbance to the heightfield (rain of "wind gusts" keeps it alive) */
+  /* add a disturbance to the heightfield: an elongated gust aligned with the
+     swell direction, so the sea undulates instead of looking rained-on */
   const FRAG_DROP = `
       precision highp float;
       uniform sampler2D water;
-      uniform vec2 center; uniform float radius; uniform float strength;
+      uniform vec2 center; uniform vec2 dir;
+      uniform float radius; uniform float strength;
       varying vec2 vUv;
       void main(){
         vec4 info = texture2D(water, vUv);
-        float drop = max(0.0, 1.0 - length(center - vUv) / radius);
+        vec2 q = vUv - center;
+        vec2 e = vec2(dot(q, dir), dot(q, vec2(-dir.y, dir.x)));
+        float drop = max(0.0, 1.0 - length(e / vec2(radius * 3.0, radius)));
         drop = 0.5 - cos(drop * 3.14159265) * 0.5;
         info.r += drop * strength;
         gl_FragColor = info;
@@ -233,6 +237,23 @@
         float hy = texture2D(uWater, suv + vec2(0.0, TEXEL)).r - h0;
         return vec2(hx, hy) * 220.0;
       }
+      /* low-passed versions for the god rays: shafts should follow the slow
+         energy envelope of the light, not every individual filament */
+      float causSmooth(vec2 w, float t){
+        float s = caus(w, t);
+        s += caus(w + vec2(0.6, 0.0), t);
+        s += caus(w - vec2(0.6, 0.0), t);
+        s += caus(w + vec2(0.0, 0.6), t);
+        s += caus(w - vec2(0.0, 0.6), t);
+        return s * 0.2;
+      }
+      vec2 slopeCoarse(vec2 w, float t){
+        vec2 suv = worldToUv(w, t);
+        float h0 = texture2D(uWater, suv).r;
+        float hx = texture2D(uWater, suv + vec2(TEXEL * 6.0, 0.0)).r - h0;
+        float hy = texture2D(uWater, suv + vec2(0.0, TEXEL * 6.0)).r - h0;
+        return vec2(hx, hy) * 36.0;
+      }
 
       void main(){
         vec2 frag=gl_FragCoord.xy;
@@ -280,15 +301,15 @@
           float d = 2.5 * pow(2.2, float(k));           // curtain distance: 2.5, 5.5, 12
           float yAtt = horizonBase + 1.0 / d;           // where it meets the surface on screen
           // rays refract off straight-down according to the wave slope overhead
-          vec2 slA = slopeAt(vec2(uv.x * d, d), t);
-          float tilt = clamp(slA.x * 0.4, -0.35, 0.35);
+          vec2 slA = slopeCoarse(vec2(uv.x * d, d), t);
+          float tilt = clamp(slA.x * 0.25, -0.3, 0.3);
           float xs = uv.x + (yAtt - uv.y) * tilt;       // ray-column coordinate
           float sway = sin(t * (1.1 - 0.04 * d) + d * 2.7) * 0.5 / d;
           float xw = xs * d * 2.2 + sway + d * 7.31;    // perspective: far shafts pack tighter
           float shafts = pow(rayCurtain(xw, t * (1.4 - 0.05 * d) + d), 1.2);
           // sync: shafts brighten beneath bright caustic patches on the surface
-          float cA = caus(vec2(xs * d, d), t);
-          shafts *= 0.3 + 7.0 * max(cA - 0.17, 0.0);
+          float cA = causSmooth(vec2(xs * d, d), t);
+          shafts *= 0.45 + 3.0 * max(cA - 0.17, 0.0);
           float lenVar = 0.5 + vnoise(vec2(xw * 0.4, t * 0.5 + d)) * 1.1;
           float below = max(yAtt - uv.y, 0.0);
           float fall = exp(-below * d * 0.35 / lenVar); // far curtains compress vertically
@@ -619,7 +640,7 @@
 
     const U = (p, n) => gl.getUniformLocation(p, n);
     const A = (p, n) => gl.getAttribLocation(p, n);
-    const uDrop = { water: U(progDrop, 'water'), center: U(progDrop, 'center'), radius: U(progDrop, 'radius'), strength: U(progDrop, 'strength'), ap: A(progDrop, 'p') };
+    const uDrop = { water: U(progDrop, 'water'), center: U(progDrop, 'center'), dir: U(progDrop, 'dir'), radius: U(progDrop, 'radius'), strength: U(progDrop, 'strength'), ap: A(progDrop, 'p') };
     const uStep = { water: U(progStep, 'water'), delta: U(progStep, 'delta'), ap: A(progStep, 'p') };
     const uCaust = { water: U(progCaust, 'water'), delta: U(progCaust, 'delta'), av: A(progCaust, 'av') };
     const uMain = { res: U(progMain, 'iResolution'), time: U(progMain, 'iTime'), water: U(progMain, 'uWater'), caust: U(progMain, 'uCaustics'), ap: A(progMain, 'p') };
@@ -644,9 +665,10 @@
       swap();
     }
 
-    function drop(x, y, radius, strength) {
+    function drop(x, y, radius, strength, angle) {
       waterPass(progDrop, uDrop, () => {
         gl.uniform2f(uDrop.center, x, y);
+        gl.uniform2f(uDrop.dir, Math.cos(angle || 0), Math.sin(angle || 0));
         gl.uniform1f(uDrop.radius, radius);
         gl.uniform1f(uDrop.strength, strength);
       });
@@ -694,23 +716,41 @@
 
     const resize = watchResize(canvas);
 
-    // prime the surface with some initial chop
-    for (let i = 0; i < 80; i++) {
-      drop(Math.random(), Math.random(), 0.015 + Math.random() * 0.035, (Math.random() - 0.5) * 0.11);
+    // one prevailing swell direction for this session, with per-gust jitter
+    const swellDir = Math.random() * 6.2832;
+
+    // prime the sea: broad swells first, then a sprinkle of fine chop
+    for (let i = 0; i < 50; i++) {
+      drop(Math.random(), Math.random(), 0.05 + Math.random() * 0.08,
+           (Math.random() - 0.5) * 0.12, swellDir + (Math.random() - 0.5) * 0.6);
       step(); step();
+    }
+    for (let i = 0; i < 25; i++) {
+      drop(Math.random(), Math.random(), 0.012 + Math.random() * 0.02,
+           (Math.random() - 0.5) * 0.05, Math.random() * 6.2832);
+      step();
     }
 
     const start = performance.now();
-    let nextDrop = 0;
+    let nextSwell = 0, nextChop = 0, stepAcc = 0;
     (function loop() {
       resize();
       const now = performance.now();
-      // wind: small random disturbances keep the sea alive
-      if (now >= nextDrop) {
-        nextDrop = now + (60 + Math.random() * 120) / CONFIG.speed;
-        drop(Math.random(), Math.random(), 0.015 + Math.random() * 0.035, (Math.random() - 0.5) * 0.09);
+      // broad swell gusts keep the sea undulating...
+      if (now >= nextSwell) {
+        nextSwell = now + (180 + Math.random() * 320) / CONFIG.speed;
+        drop(Math.random(), Math.random(), 0.05 + Math.random() * 0.08,
+             (Math.random() - 0.5) * 0.10, swellDir + (Math.random() - 0.5) * 0.6);
       }
-      step(); step();
+      // ...while a little fine chop keeps the caustic filaments crisp
+      if (now >= nextChop) {
+        nextChop = now + (250 + Math.random() * 350) / CONFIG.speed;
+        drop(Math.random(), Math.random(), 0.012 + Math.random() * 0.02,
+             (Math.random() - 0.5) * 0.05, Math.random() * 6.2832);
+      }
+      // sim rate scales with CONFIG.speed (~1 step per frame at speed 1)
+      stepAcc += CONFIG.speed;
+      while (stepAcc >= 1) { step(); stepAcc -= 1; }
       renderCaustics();
       renderMain(((now - start) / 1000) * CONFIG.speed);
       requestAnimationFrame(loop);
