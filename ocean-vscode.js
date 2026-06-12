@@ -12,6 +12,7 @@
     speed: 2.00, // motion speed multiplier                       (0.2 – 3)
     minimap: 0.45, // minimap translucency so ocean shows through  (0 = invisible, 1 = solid)
     sticky: 0.92, // sticky-scroll backing opacity (uses the THEME's color)
+    caustics: 1.0, // brightness of the caustic web on the surface    (0 – 2)
   };
 
   if (document.getElementById('__aurora-bg')) return; // already injected
@@ -137,6 +138,23 @@
         for(int i=0;i<6;i++){ s+=a*vnoise(p); p=m*p; a*=0.5; } return s; }
       float dither(vec2 f){ return (hash21(f+fract(iTime))-0.5)*0.004; }
 
+      /* Iterative-refraction caustic web: each pass bends the sample point like
+         light through a wavy surface, and brightness spikes where rays focus. */
+      float caustic(vec2 suv, float tc){
+        vec2 p = mod(suv * 6.2831853, 6.2831853) - 250.0;
+        vec2 i = p;
+        float c = 1.0;
+        const float inten = 0.005;
+        for (int n = 0; n < 5; n++) {
+          float ph = tc * (1.0 - (3.5 / float(n + 1)));
+          i = p + vec2(cos(ph - i.x) + sin(ph + i.y), sin(ph - i.y) + cos(ph + i.x));
+          c += 1.0 / max(length(vec2(p.x / (sin(i.x + ph) / inten), p.y / (cos(i.y + ph) / inten))), 1e-3);
+        }
+        c /= 5.0;
+        c = 1.17 - pow(c, 1.4);
+        return pow(abs(c), 8.0);
+      }
+
       void main(){
         vec2 frag=gl_FragCoord.xy;
         vec2 uv=(frag-0.5*iResolution.xy)/iResolution.y;
@@ -198,10 +216,32 @@
         // Add primary layer color: softer blue, less green, more transparent overall
         col += vec3(0.10, 0.20, 0.65) * shafts * pow(clamp(rayDepth, 0.0, 1.0), 1.5) * 0.9;
 
-        // 4. Wavelike Surface glow at the very top
-        float surfaceEdge = 0.40 + 0.05 * fbm(uv * 8.0 - vec2(t * 2.0, 0.0));
-        float surfaceGlow = smoothstep(surfaceEdge - 0.15, 0.5, uv.y);
-        col += vec3(0.2, 0.45, 0.9) * surfaceGlow * 0.6;
+        // 4. The water surface seen from below: the upper band of the screen is
+        // perspective-projected onto an overhead plane, so the caustic cells
+        // foreshorten and recede toward a hazy horizon line.
+        float horizon = 0.22 + 0.03 * fbm(vec2(uv.x * 2.5 + t * 1.2, t * 0.8));
+        float dy = uv.y - horizon;
+
+        // soft glow where the surface melts into the distance
+        col += vec3(0.2, 0.45, 0.9) * smoothstep(horizon - 0.15, horizon + 0.25, uv.y) * 0.5;
+
+        if (dy > 0.002) {
+          float dist = 1.0 / dy;                     // distance along the overhead plane
+          vec2 pw = vec2(uv.x * dist, dist);         // projected point on the surface
+          pw = pw * 0.22 + vec2(t * 0.6, t * 1.1);   // pattern scale + slow current drift
+          pw.x += sin(pw.y * 1.5 + t * 2.0) * 0.12;  // long swell bending the web
+
+          float tc = iTime * 0.3 + 23.0;
+          // chromatic dispersion: wavelengths focus at slightly different points
+          float cr = caustic(pw, tc);
+          float cg = caustic(pw * 1.012, tc + 0.04);
+          float cb = caustic(pw * 1.024, tc + 0.08);
+          vec3 web = vec3(cr, cg, cb) * vec3(0.50, 0.90, 1.15);
+
+          float fog = exp(-(dist - 3.0) * 0.18);     // far cells dissolve into the haze
+          fog = min(fog, 1.0);
+          col += (vec3(0.08, 0.30, 0.60) * 0.35 + web * float(${CONFIG.caustics.toFixed(2)}) * 0.9) * fog;
+        }
 
         // 5. Drifting Bioluminescent Plankton
         vec2 pGrid = uv * 12.0; // Higher density grid for more, smaller particles

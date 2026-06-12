@@ -75,6 +75,7 @@ const CONFIG = {
   speed:   1.00, // motion speed multiplier                       (0.2 – 3)
   minimap: 0.45, // minimap translucency so background shows through
   sticky:  0.92, // sticky-scroll backing opacity (uses your THEME's color)
+  caustics: 1.0, // ocean themes only: brightness of the surface caustics (0 – 2)
 };
 ```
 
