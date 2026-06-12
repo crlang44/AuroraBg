@@ -136,9 +136,9 @@
         float depth = clamp(uv.y + 0.5, 0.0, 1.0); // 0.0 at bottom edge, 1.0 at top edge
 
         // 1. Background Gradient (The Cutout)
-        vec3 colBottom = vec3(0.08, 0.35, 0.70); // Very bright, vivid blue at the bottom
-        vec3 colMid    = vec3(0.10, 0.45, 0.80); // Bright ocean mid-blue
-        vec3 colTop    = vec3(0.10, 0.55, 0.85); // Bright blue near surface
+        vec3 colBottom = vec3(0.01, 0.02, 0.08); // Very dark navy abyss
+        vec3 colMid    = vec3(0.02, 0.15, 0.45); // Deep true blue (less green)
+        vec3 colTop    = vec3(0.05, 0.40, 0.85); // Bright true blue near surface (removed teal/green)
         
         vec3 col = mix(colBottom, colMid, smoothstep(0.0, 0.5, depth));
         col = mix(col, colTop, smoothstep(0.5, 1.0, depth));
@@ -154,66 +154,64 @@
 
         float f = fbm(uv * 2.5 + r * 2.0 + vec2(0.0, t * 0.3));
 
-        // Add the fluid ripples (very subtle so it doesn't look like thick haze/smoke)
-        col += vec3(0.01, 0.05, 0.15) * f * depth;
+        // Add the fluid ripples, stronger near the top (shifted to pure blue, less green)
+        col += vec3(0.02, 0.15, 0.50) * f * (0.2 + 0.8 * depth);
 
-        // 3. Volumetric God Rays (Randomly appearing/disappearing)
-        // Almost entirely straight down, with barely any radial fan
+        // 3. Volumetric God Rays (Multi-layered, deep blue, transparent)
         float expansion = mix(1.1, 0.95, depth); 
         float scaledX = uv.x / expansion;
         
-        // Very slow, subtle sway so they aren't completely frozen
+        // Very slow, subtle sway
         scaledX += sin(t * 0.2) * 0.02;
         
-        // --- Layer 1: Broad, ultra-transparent background washes ---
-        float bg1 = vnoise(vec2(scaledX * 4.0, t * 0.4));
-        float bg2 = vnoise(vec2(scaledX * 8.0, t * 0.6));
-        float bgShafts = smoothstep(0.3, 0.9, bg1 * 0.6 + bg2 * 0.4);
+        // --- Layer 1: Ultra-broad, deeply transparent ambient background washes ---
+        float bg1 = vnoise(vec2(scaledX * 3.0, t * 0.3));
+        float bg2 = vnoise(vec2(scaledX * 6.0, t * 0.5));
+        float bgShafts = smoothstep(0.2, 0.9, bg1 * 0.6 + bg2 * 0.4);
+        col += vec3(0.02, 0.10, 0.40) * bgShafts * pow(depth, 1.2) * 0.5;
         
-        // Add background layer color: incredibly faint so it doesn't look hazy
-        col += vec3(0.04, 0.10, 0.25) * bgShafts * pow(depth, 1.5) * 0.25;
+        // --- Layer 2: Mid-ground, soft broad rays ---
+        float mg1 = vnoise(vec2(scaledX * 8.0, t * 0.6));
+        float mg2 = vnoise(vec2(scaledX * 16.0, t * 0.9));
+        float mgShafts = smoothstep(0.3, 0.8, mg1 * 0.6 + mg2 * 0.4);
+        float mgDepthVar = vnoise(vec2(scaledX * 3.0, t * 0.4));
+        float mgDepth = depth * (0.3 + mgDepthVar * 1.5);
+        col += vec3(0.04, 0.15, 0.50) * mgShafts * pow(clamp(mgDepth, 0.0, 1.0), 1.5) * 0.4;
         
-        // --- Layer 2: Primary, distinct rays ---
-        float n1 = vnoise(vec2(scaledX * 12.0, t * 0.8));
-        float n2 = vnoise(vec2(scaledX * 24.0, t * 1.2));
-        float n3 = vnoise(vec2(scaledX * 45.0, t * 1.6));
-        
+        // --- Layer 3: Foreground distinct (but highly transparent) rays ---
+        float n1 = vnoise(vec2(scaledX * 15.0, t * 0.8));
+        float n2 = vnoise(vec2(scaledX * 30.0, t * 1.2));
+        float n3 = vnoise(vec2(scaledX * 50.0, t * 1.6));
         float baseShafts = n1 * 0.5 + n2 * 0.3 + n3 * 0.2;
         float shafts = smoothstep(0.45, 0.85, baseShafts);
-        shafts = pow(shafts, 1.3) * 1.2;
-        
-        // Dynamic depth penetration for primary rays
-        float depthVar = vnoise(vec2(scaledX * 4.0, t * 0.5));
+        shafts = pow(shafts, 1.3);
+        float depthVar = vnoise(vec2(scaledX * 5.0, t * 0.5));
         float rayDepth = depth * (0.2 + depthVar * 1.5);
-        
-        // Add primary layer color: softer blue, less green, more transparent overall
-        col += vec3(0.10, 0.20, 0.65) * shafts * pow(clamp(rayDepth, 0.0, 1.0), 1.5) * 0.9;
+        col += vec3(0.05, 0.25, 0.70) * shafts * pow(clamp(rayDepth, 0.0, 1.0), 1.5) * 0.4;
 
-        // 4. Wavelike Surface glow at the very top
+        // 4. Wavelike Surface glow at the very top (shifted to deep blue)
         float surfaceEdge = 0.40 + 0.05 * fbm(uv * 8.0 - vec2(t * 2.0, 0.0));
         float surfaceGlow = smoothstep(surfaceEdge - 0.15, 0.5, uv.y);
-        col += vec3(0.2, 0.45, 0.9) * surfaceGlow * 0.6;
+        col += vec3(0.05, 0.30, 0.80) * surfaceGlow * 0.4;
 
         // 5. Drifting Bioluminescent Plankton
-        vec2 pGrid = uv * 12.0; // Higher density grid for more, smaller particles
-        
-        // Very slow wavelike swaying motion with a slight horizontal phase offset
-        pGrid.x += sin(uv.y * 6.0 + uv.x * 2.0 + iTime * 0.15) * 0.4 
-                 + cos(uv.y * 3.0 - uv.x * 1.5 - iTime * 0.1) * 0.3;
+        vec2 pGrid = uv * 12.0; 
+        pGrid.y -= iTime * 0.04;
+        pGrid.x += sin(pGrid.y * 2.0 + iTime * 0.1) * 0.15;
         vec2 ip = floor(pGrid);
         vec2 fp = fract(pGrid);
         vec2 pOffset = vec2(hash21(ip), hash21(ip + 13.37));
         float pDist = length(fp - pOffset);
         float pBlink = sin(iTime * 0.6 + pOffset.x * 6.28) * 0.5 + 0.5;
         
-        // Much smaller particles
         float pGlow = smoothstep(0.015 + 0.015 * pOffset.y, 0.0, pDist) * pBlink;
-        pGlow *= smoothstep(0.0, 0.8, depth); // Fade out slightly at the abyss
+        pGlow *= smoothstep(0.0, 0.8, depth); 
         
-        col += pGlow * 0.5 * vec3(0.3, 0.45, 0.9); // Slightly brighter core
+        // Plankton shifted to a softer blue with just a hint of cyan
+        col += pGlow * 0.4 * vec3(0.15, 0.50, 0.90); 
 
-        // Vignette (weakened so the edges stay bright)
-        col *= 1.0 - 0.15 * length(uv * vec2(0.6, 1.0));
+        // Vignette
+        col *= 1.0 - 0.4 * length(uv * vec2(0.6, 1.0));
 
         // Dither
         col += dither(frag);

@@ -1,0 +1,22 @@
+{
+  "name": "aurora-ocean-blue",
+  "displayName": "Aurora Ocean Blue",
+  "description": "A slightly lighter gray-blue theme to accompany the Aurora Ocean background.",
+  "version": "1.0.3",
+  "publisher": "aurora",
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Themes"
+  ],
+  "contributes": {
+    "themes": [
+      {
+        "label": "Aurora Ocean Blue",
+        "uiTheme": "vs-dark",
+        "path": "./themes/aurora-ocean-blue-color-theme.json"
+      }
+    ]
+  }
+}
