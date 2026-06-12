@@ -226,10 +226,13 @@
           float xs = uv.x + (yAtt - uv.y) * tilt;       // ray-column coordinate
           float xw = xs * d * 2.2 + sway + d * 7.31;    // perspective: far shafts pack tighter
           float shafts = pow(rayCurtain(xw, t * (1.4 - 0.05 * d) + d), 1.2);
-          // sync: shafts brighten beneath bright caustic patches on the surface
+          // sync: shafts brighten beneath bright caustic patches on the surface,
+          // sampling the same wave-coupled field the surface uses
+          float hA = waveH(vec2(xs * d, d), t);
           vec2 cw = vec2(xs * d, d) * 0.22 + cDrift;
           cw.x += sin(cw.y * 1.5 + t * 0.9) * 0.12;
-          shafts *= 0.35 + 1.6 * min(caustic(cw, tc), 1.2);
+          float cA = caustic(cw, tc + hA * 0.5) * (0.55 + 0.7 * smoothstep(-1.2, 1.4, hA));
+          shafts *= 0.35 + 1.6 * min(cA, 1.2);
           float lenVar = 0.5 + vnoise(vec2(xw * 0.4, t * 0.5 + d)) * 1.1;
           float below = max(yAtt - uv.y, 0.0);
           float fall = exp(-below * d * 0.35 / lenVar); // far curtains compress vertically
@@ -258,15 +261,19 @@
           vec2 grad = vec2(waveH(pw0 + vec2(e, 0.0), t) - h,
                            waveH(pw0 + vec2(0.0, e), t) - h) / e;
 
-          // parallax-refract the caustic lookup over the swells, then scale + drift
-          vec2 pw = (pw0 + grad * 0.9) * 0.22 + cDrift;
+          // the swells focus the caustics: the lookup refracts down the wave
+          // slopes, the web's phase rides the wave height, and brightness
+          // concentrates under the crests where the surface lenses the light
+          vec2 pw = (pw0 + grad * 1.6) * 0.22 + cDrift;
           pw.x += sin(pw.y * 1.5 + t * 0.9) * 0.12;
+          float tcw = tc + h * 0.5;
 
           // chromatic dispersion: wavelengths focus at slightly different points
-          float cr = caustic(pw, tc);
-          float cg = caustic(pw * 1.012, tc + 0.04);
-          float cb = caustic(pw * 1.024, tc + 0.08);
-          vec3 web = vec3(cr, cg, cb) * vec3(0.50, 0.90, 1.15);
+          float cr = caustic(pw, tcw);
+          float cg = caustic(pw * 1.012, tcw + 0.04);
+          float cb = caustic(pw * 1.024, tcw + 0.08);
+          float focus = 0.55 + 0.7 * smoothstep(-1.2, 1.4, h);
+          vec3 web = vec3(cr, cg, cb) * vec3(0.50, 0.90, 1.15) * focus;
 
           // slope shading: wave faces tilted toward the viewer catch the skylight
           float shade = clamp(0.55 - grad.y * 0.45 - grad.x * 0.12, 0.0, 1.0);
