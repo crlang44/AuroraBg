@@ -9,7 +9,7 @@
   const CONFIG = {
     opacity: 0.60, // how visible the ocean is behind your code   (0 – 1)
     dim: 0.50, // extra dark scrim for text readability         (0 – 1)
-    speed: 2.00, // motion speed multiplier                       (0.2 – 3)
+    speed: 1.00, // motion speed multiplier                       (0.2 – 3)
     minimap: 0.45, // minimap translucency so ocean shows through  (0 = invisible, 1 = solid)
     sticky: 0.92, // sticky-scroll backing opacity (uses the THEME's color)
     caustics: 1.0, // brightness of the caustic web on the surface    (0 – 2)
@@ -221,10 +221,13 @@
           float d = 2.5 * pow(2.2, float(k));           // curtain distance: 2.5, 5.5, 12
           float yAtt = horizonBase + 1.0 / d;           // where it meets the surface on screen
           float sway = sin(t * (1.1 - 0.04 * d) + d * 2.7) * 0.5 / d;
-          float xw = uv.x * d * 2.2 + sway + d * 7.31;  // perspective: far shafts pack tighter
+          // rays lean off vertical, like sunlight slanting through the water
+          float tilt = 0.16 + 0.05 * sin(t * 0.2 + d * 1.7);
+          float xs = uv.x + (yAtt - uv.y) * tilt;       // ray-column coordinate
+          float xw = xs * d * 2.2 + sway + d * 7.31;    // perspective: far shafts pack tighter
           float shafts = pow(rayCurtain(xw, t * (1.4 - 0.05 * d) + d), 1.2);
           // sync: shafts brighten beneath bright caustic patches on the surface
-          vec2 cw = vec2(uv.x * d, d) * 0.22 + cDrift;
+          vec2 cw = vec2(xs * d, d) * 0.22 + cDrift;
           cw.x += sin(cw.y * 1.5 + t * 0.9) * 0.12;
           shafts *= 0.35 + 1.6 * min(caustic(cw, tc), 1.2);
           float lenVar = 0.5 + vnoise(vec2(xw * 0.4, t * 0.5 + d)) * 1.1;
