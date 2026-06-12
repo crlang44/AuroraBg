@@ -205,6 +205,10 @@
         // curtains are thinner, shorter, dimmer, and washed out by water haze.
         float horizonBase = 0.22;
 
+        // shared caustic-field mapping so the rays and the surface stay in sync
+        float tc = iTime * 0.1 + 23.0;
+        vec2 cDrift = vec2(t * 0.25, t * 0.45);
+
         // ambient wash so the water column never goes flat
         float bg1 = vnoise(vec2(uv.x * 4.0, t * 0.4));
         float bg2 = vnoise(vec2(uv.x * 8.0, t * 0.6));
@@ -219,6 +223,10 @@
           float sway = sin(t * (1.1 - 0.04 * d) + d * 2.7) * 0.5 / d;
           float xw = uv.x * d * 2.2 + sway + d * 7.31;  // perspective: far shafts pack tighter
           float shafts = pow(rayCurtain(xw, t * (1.4 - 0.05 * d) + d), 1.2);
+          // sync: shafts brighten beneath bright caustic patches on the surface
+          vec2 cw = vec2(uv.x * d, d) * 0.22 + cDrift;
+          cw.x += sin(cw.y * 1.5 + t * 0.9) * 0.12;
+          shafts *= 0.35 + 1.6 * min(caustic(cw, tc), 1.2);
           float lenVar = 0.5 + vnoise(vec2(xw * 0.4, t * 0.5 + d)) * 1.1;
           float below = max(yAtt - uv.y, 0.0);
           float fall = exp(-below * d * 0.35 / lenVar); // far curtains compress vertically
@@ -248,10 +256,9 @@
                            waveH(pw0 + vec2(0.0, e), t) - h) / e;
 
           // parallax-refract the caustic lookup over the swells, then scale + drift
-          vec2 pw = (pw0 + grad * 0.9) * 0.22 + vec2(t * 0.6, t * 1.1);
-          pw.x += sin(pw.y * 1.5 + t * 2.0) * 0.12;
+          vec2 pw = (pw0 + grad * 0.9) * 0.22 + cDrift;
+          pw.x += sin(pw.y * 1.5 + t * 0.9) * 0.12;
 
-          float tc = iTime * 0.3 + 23.0;
           // chromatic dispersion: wavelengths focus at slightly different points
           float cr = caustic(pw, tc);
           float cg = caustic(pw * 1.012, tc + 0.04);
